@@ -21,6 +21,13 @@ class GenerateSitemap {
 	protected $count = 0;
 
 	/**
+	 * All URL count
+	 *
+	 * @var int
+	 */
+	protected $total = 0;
+
+	/**
 	 * URL lists
 	 *
 	 * @var array
@@ -32,7 +39,7 @@ class GenerateSitemap {
 	 *
 	 * @var array
 	 */
-	protected $config = array();
+	public $config = array();
 
 	/**
 	 * Generated sitemap files
@@ -52,7 +59,40 @@ class GenerateSitemap {
 			'prefix' => 'sitemap'
 		);
 
-		$this->config = array_merge($default, Configure::read(__CLASS__));
+		$this->config = array_merge($default, Configure::read(__CLASS__) ?: array());
+	}
+
+	/**
+	 * Destructor
+	 *
+	 * Delete tmp files
+	 */
+	public function __destruct() {
+		foreach ($this->files as $file) {
+			$file->delete();
+		}
+	}
+
+	/**
+	 * Appended urls count
+	 *
+	 * @param bool $sum true: return total urls, false: in xml urls
+	 * @return int
+	 */
+	public function count($total = false) {
+		if ($total) {
+			return $this->total;
+		}
+		return $this->count;
+	}
+
+	/**
+	 * Get urls
+	 *
+	 * @return array
+	 */
+	public function url() {
+		return $this->url;
 	}
 
 	/**
@@ -82,8 +122,9 @@ class GenerateSitemap {
 
 		$this->url[] = $data;
 		++$this->count;
+		++$this->total;
 
-		if ($this->count > self::MAX_COUNT) {
+		if ($this->count >= self::MAX_COUNT) {
 			$this->generate();
 		}
 	}
@@ -101,14 +142,15 @@ class GenerateSitemap {
 			)
 		));
 
-		$file = new File($this->config['tmpDir'] . DS . $this->config['prefix'] . count($this->files) . ".xml.gz",
-			true, 0666);
-
-		if (!$file->write(gzencode($xml->saveXML()))) {
-			throw new Exception("Write Error: ". $file->path . DS . $file->name);
+		$filename = $this->config['tmpDir'] . DS . $this->config['prefix'] . count($this->files) . ".xml.gz";
+		$zp = gzopen($filename, 'wb');
+		if ($zp === false) {
+			throw new Exception('Open file error: ' . $filename);
 		}
-		$file->close();
-		$this->files[] = $file;
+		gzwrite($zp, $xml->saveXML());
+		gzclose($zp);
+
+		$this->files[] = new File($filename);
 
 		$this->url = array();
 		$this->count = 0;
@@ -124,7 +166,6 @@ class GenerateSitemap {
 
 		$sitemap = array();
 
-		/** @var File $file */
 		foreach ($this->files as $file) {
 			$file->copy($this->config['saveDir'] . DS . $file->name);
 			$sitemap[] = array(
@@ -143,6 +184,18 @@ class GenerateSitemap {
 
 		if ($xml->asXML($this->config['saveDir'] . DS . $this->config['prefix'] . DS . "xml")) {
 			throw new Exception("Can't save sitemap index xml.");
+		}
+	}
+
+	/**
+	 * Clear all saveDir sitemap
+	 */
+	public function clear() {
+		$folder = new Folder($this->config['saveDir']);
+		$files = $folder->find("{$this->config['prefix']}.*");
+
+		foreach ($files as $file) {
+			$file->delete();
 		}
 	}
 }
