@@ -21,6 +21,7 @@ class GenerateSitemapTest extends CakeTestCase
 
 	/**
 	 * For test data
+	 *
 	 * @var array
 	 */
 	public $testData = array();
@@ -30,7 +31,7 @@ class GenerateSitemapTest extends CakeTestCase
 
 		if (empty($this->testData)) {
 			for ($i = 0; $i < self::GENERATE_TEST_URLS; $i++) {
-				$this->testData[] = 'http://www.example.com/' . $i;
+				$this->testData[] = $i;
 			}
 		}
 	}
@@ -86,11 +87,11 @@ class GenerateSitemapTest extends CakeTestCase
 		}
 
 		$this->assertInstanceOf('SimpleXMLElement', $xml);
-		$this->assertNotEmpty($xml->getNamespaces()); // urlset's namespace
+		$this->assertNotEmpty($xml->getNamespaces()); // root namespace
 
 		try {
 			$content = Xml::toArray($xml); // test to easy
-		} catch (Exception $E) {
+		} catch (Exception $e) {
 			$this->fail('Xml parse error: Xml::toArray()');
 		}
 
@@ -123,5 +124,46 @@ class GenerateSitemapTest extends CakeTestCase
 		$file = $this->GenerateSitemap->files[0];
 		$this->assertInstanceOf('File', $file);
 		$this->assertGreaterThan(0, $file->size());
+	}
+
+	/**
+	 * Publish generated sitemap
+	 */
+	public function testPublish() {
+		$this->GenerateSitemap->config['baseUrl'] = 'http://www.example.com/';
+
+		foreach ($this->testData as $loc) {
+			$this->GenerateSitemap->append($loc);
+		}
+		$this->assertEquals(self::GENERATE_TEST_URLS, $this->GenerateSitemap->count(true));
+
+		try {
+			$sitemapIndex = $this->GenerateSitemap->publish();
+		} catch (Exception $e) {
+			$this->fail();
+		}
+
+		// generated files count
+		$expectedFiles = (int)ceil(self::GENERATE_TEST_URLS / GenerateSitemap::MAX_COUNT);
+		$this->assertEquals($expectedFiles, count($this->GenerateSitemap->files));
+
+		$this->assertEquals(count($this->GenerateSitemap->files), count($this->GenerateSitemap->published));
+		$file = new File($sitemapIndex);
+
+		try {
+			$xml = Xml::build($file->read());
+		} catch (Exception $e) {
+			$this->fail();
+		}
+
+		$this->assertInstanceOf('SimpleXMLElement', $xml);
+		$this->assertNotEmpty($xml->getNamespaces()); // root namespace
+
+		$content = Xml::toArray($xml);
+
+		foreach ($content['sitemapindex']['sitemap'] as $key => $sitemap) {
+			$expected = 'http://www.example.com/' . $this->GenerateSitemap->published[$key]->name;
+			$this->assertEquals($expected, $sitemap['loc']);
+		}
 	}
 }

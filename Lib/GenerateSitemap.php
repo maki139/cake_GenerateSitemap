@@ -1,6 +1,7 @@
 <?php
 App::uses('File', 'Utility');
 App::uses('Xml', 'Utility');
+App::uses('GenerateSitemapGenerateSitemapException', __CLASS__ . '.Lib/Error');
 /**
  * Class Generate Sitemap
  */
@@ -12,6 +13,13 @@ class GenerateSitemap {
 	 * @var int
 	 */
 	const MAX_COUNT = 50000;
+
+	/**
+	 * XML urlset namespace
+	 *
+	 * @var string
+	 */
+	const URLSET_NS = 'http://www.sitemaps.org/schemas/sitemap/0.9';
 
 	/**
 	 * URL count
@@ -44,9 +52,16 @@ class GenerateSitemap {
 	/**
 	 * Generated sitemap files
 	 *
-	 * @var array
+	 * @var array [] => File
 	 */
 	public $files = array();
+
+	/**
+	 * Published files
+	 *
+	 * @var array [] => File
+	 */
+	public $published = array();
 
 	/**
 	 * Constructor
@@ -55,7 +70,7 @@ class GenerateSitemap {
 		$default = array(
 			'baseUrl' => '/',
 			'tmpDir' => TMP,
-			'saveDir' => WEBROOT_DIR,
+			'saveDir' => APP . WEBROOT_DIR,
 			'prefix' => 'sitemap'
 		);
 
@@ -132,12 +147,12 @@ class GenerateSitemap {
 	/**
 	 * Generate sitemap xml.gz
 	 *
-	 * @throws Exception
+	 * @throws GenerateSitemapException
 	 */
 	public function generate() {
 		$xml = Xml::fromArray(array(
 			'urlset' => array(
-				'xmlns:' => 'http://www.sitemaps.org/schemas/sitemap/0.9',
+				'xmlns:' => self::URLSET_NS,
 				'url' => $this->url
 			)
 		));
@@ -145,7 +160,7 @@ class GenerateSitemap {
 		$filename = $this->config['tmpDir'] . DS . $this->config['prefix'] . count($this->files) . ".xml.gz";
 		$zp = gzopen($filename, 'wb');
 		if ($zp === false) {
-			throw new Exception('Open file error: ' . $filename);
+			throw new GenerateSitemapException('Open file error: ' . $filename);
 		}
 		gzwrite($zp, $xml->saveXML());
 		gzclose($zp);
@@ -158,6 +173,9 @@ class GenerateSitemap {
 
 	/**
 	 * Publish sitemap
+	 *
+	 * @throws GenerateSitemapException
+	 * @return string Generated sitemap index file path
 	 */
 	public function publish() {
 		if (! empty($this->url)) {
@@ -166,25 +184,31 @@ class GenerateSitemap {
 
 		$sitemap = array();
 
-		foreach ($this->files as $file) {
-			$file->copy($this->config['saveDir'] . DS . $file->name);
+		foreach ($this->files as $key => $file) {
+			$publishPath = $this->config['saveDir'] . DS . $file->name;
+			$file->copy($publishPath);
 			$sitemap[] = array(
-				'loc' => $this->config['baseUrl'] . DS . $file->name,
-				'lastmod' => date('Y-m-d')
+				'loc' => $this->config['baseUrl'] . $file->name,
+				'lastmod' => date('c')
 			);
 			$file->delete();
+
+			$this->published[$key] = new File($publishPath);
 		}
 
 		$xml = Xml::fromArray(array(
 			'sitemapindex' => array(
-				'xmlns:' => 'http://www.sitemaps.org/schemas/sitemap/0.9',
+				'xmlns:' => self::URLSET_NS,
 				'sitemap' => $sitemap
 			)
 		));
 
-		if ($xml->asXML($this->config['saveDir'] . DS . $this->config['prefix'] . DS . "xml")) {
-			throw new Exception("Can't save sitemap index xml.");
+		$filename = $this->config['saveDir'] . DS . $this->config['prefix'] . ".xml";
+		if (! $xml->asXML($filename)) {
+			throw new GenerateSitemapException("Can't save sitemap index xml.");
 		}
+
+		return $filename;
 	}
 
 	/**
@@ -195,6 +219,7 @@ class GenerateSitemap {
 		$files = $folder->find("{$this->config['prefix']}.*");
 
 		foreach ($files as $file) {
+			$file = new File($folder->pwd() . DS . $file);
 			$file->delete();
 		}
 	}
