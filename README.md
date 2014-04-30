@@ -6,7 +6,7 @@ Generate Sitemap Library
 
 CakePHP でサイトマップの生成を行うライブラリ (クラス) をプラグイン形式で提供します。
 
-サイトマップについての説明: [sitemap.org](http://www.sitemaps.org/protocol.html)
+サイトマップについての説明: [sitemaps.org](http://www.sitemaps.org/protocol.html)
 
 License: MIT License
 
@@ -21,7 +21,7 @@ Required
 ===
 
 - CakePHP 2
-- PHP ZLIB extension
+- PHP Zlib extension
 
 How to use
 ===
